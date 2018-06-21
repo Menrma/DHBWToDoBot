@@ -37,15 +37,30 @@ def processRequest(req):
 
 		if intentName == "Begruessung Intent":
 			response = __processBegruessungIntent(dbHelper)
-		elif intentName == "Termin Datum":
+		elif intentName == "Termin abfragen Datum":
 			# Get date from request
-			date = req.get("queryResult").get("parameters").get("date")
-			date = date[:10]
-			response = __processTerminAbfragenIntent(dbHelper, date)
-		elif intentName == "Termin Heute":
+			date = req.get("queryResult").get("parameters").get("Datum")
+			if date:
+				response = __processTerminAbfragenIntent(dbHelper, date)
+			else:
+				response = __proccessTerminHeuteIntent(dbHelper)
+		elif intentName == "Termin abfragen Heute":
 			response = __proccessTerminHeuteIntent(dbHelper)
-		elif intentName == "Termin Woche":
+		elif intentName == "Termin abfragen Woche":
 			response = __proccessTerminWocheIntent(dbHelper)
+		elif intentName == "Termin erstellen 2":
+			#Get parameters from request
+			datum = req.get("queryResult").get("parameters").get("Datum")
+			uhrzeit = req.get("queryResult").get("parameters").get("Uhrzeit")
+			dauer = req.get("queryResult").get("parameters").get("Dauer")
+			ort = req.get("queryResult").get("parameters").get("Ort")
+			titel = req.get("queryResult").get("parameters").get("Titel")
+			repsonse = __processTerminErstellenIntent(dbHelper, datum, uhrzeit, dauer, ort, titel)
+		elif intentName == "Termin löschen 2":
+			datum = req.get("queryResult").get("parameters").get("Datum")
+			uhrzeit = req.get("queryResult").get("parameters").get("Uhrzeit")
+			titel = req.get("queryResult").get("parameters").get("any")
+			response = __processTerminLoeschennIntent(dbHelper, datum, uhrzeit, titel)
 	except:
 		print("Unexpected error:", sys.exc_info()[0])
 	finally:
@@ -69,6 +84,7 @@ def __processBegruessungIntent(dbHelper):
 		return "Hallo, ich bin Dein persönlicher Assistent und werde Dich bei der Planung Deiner Termine unterstützen. Möchtest Du einen Termin erstellen?"
 
 def __processTerminAbfragenIntent(dbHelper, date):
+		date = date[:10]
 		dateOutput = __convertDateForOutput(date)
 		dbResult = dbHelper.selectDayTodo(TEST_TELEGRAM_ID, date)
 		if(dbResult):
@@ -95,6 +111,36 @@ def __proccessTerminWocheIntent(dbhelper):
 			return response
 		else:
 			return "Für die kommende Woche sind keine Aufgaben vorhanden."
+
+def __processTerminErstellenIntent(dbhelper, datum, uhrzeit, dauer, ort, titel):
+	dt = datum[:10]
+	uz = uhrzeit[11:-6]
+	dateOutput = __convertDateForOutput(dt)
+	insertResponse, res = dbhelper.insertToDo(TEST_TELEGRAM_ID, dt, uz, ort, dauer, titel)
+	if insertResponse == 0:
+		# zu diesem Zeitpunkt gibt es bereit einen Termin
+		return ""
+	elif insertResponse == 1:
+		# Fehler
+		return ""
+	elif insertResponse == 2:
+		# Hat funktioniert
+		return "Termin {0} am {1} um {2} wurde erfolgreich angelegt.".format(titel, dateOutput, uz)
+
+def __processTerminLoeschennIntent(dbhelper, datum, uhrzeit, titel):
+	dt = datum[:10]
+	uz = uhrzeit[11:-6]
+	dateOutput = __convertDateForOutput(dt)
+	deleteResponse = dbhelper.deleteToDo(TEST_TELEGRAM_ID, dt, uz, titel)
+	if deleteResponse == 0:
+		return "Am {0} um {1} ist keine Aufgabe vorhanden.".format(dt, uz)
+	elif deleteResponse == 1:
+		return "Es ist ein Fehler beim Löschen der Aufgabe am {0} um {1} Uhr aufgetreten".format(dateOutput, uz)
+	elif deleteResponse == 2:
+		if titel:
+			return "Die Aufgabe mit dem Titel {0} am {1} um {2} wurde erfolgreich gelöscht.".format(titel, dateOutput, uz)
+		else:
+			return "Die Aufgabe am {0} um {1} wurde erfolgreich gelöscht.".format(dateOutput, uz)
 
 def __generateResponseFromDBResult(dbResult):
 	response = ""

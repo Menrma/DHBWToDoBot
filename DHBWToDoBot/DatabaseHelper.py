@@ -11,6 +11,7 @@ class DatabaseHelper(object):
 		""" Inits the class and opens the connection to the database"""
 		try:
 			dbConnection = sqlite3.connect(path)
+			self.__dbCon = dbConnection
 			self.__dbCursor = dbConnection.cursor()
 		except Error as e:
 			print(e)
@@ -84,6 +85,53 @@ class DatabaseHelper(object):
 				return None
 		else:
 			return None
+
+	def deleteToDo(self, telegramID, datum, uhrzeit, titel):
+		user_id = self.__getUserIdByTelegramID(telegramID)
+		if user_id:
+			sql_command = "SELECT * FROM ToDos WHERE User_ID=? AND Datum=? AND Uhrzeit=?"
+			try:
+				self.__dbCursor.execute(sql_command, (user_id, datum, uhrzeit))
+				result = self.__dbCursor.fetchall()
+				if not result:
+					return 0
+				else:
+					sql_command = 'DELETE FROM ToDos WHERE User_ID=? AND Datum=? AND Uhrzeit=?'
+					if titel:
+						sql_command += ' AND Titel=?'
+						self.__dbCursor.execute(sql_command, (user_id, datum, uhrzeit, titel))
+					else:
+						self.__dbCursor.execute(sql_command, (user_id, datum, uhrzeit))
+
+				self.__dbCon.commit()
+				return 2
+			except:				
+				print("Unexpected error:", sys.exc_info()[0])
+				return 1
+		else:
+			return 1
+
+	def insertToDo(self, telegramID, datum, uhrzeit, ort, dauer, titel):
+		user_id = self.__getUserIdByTelegramID(telegramID)
+		if user_id:
+			# check if there is a todo on this date at this time
+			sql_command = "SELECT * FROM ToDos WHERE User_ID=? AND Datum=? AND Uhrzeit=?"
+			try:
+				self.__dbCursor.execute(sql_command, (user_id, datum, uhrzeit))
+				result = self.__dbCursor.fetchall()
+				if result:
+					return (0, result)
+				else:
+					# there's no todo on this date at this time
+					sql_command = "INSERT INTO ToDos (User_ID, Titel, Datum, Uhrzeit, Dauer, Ort) VALUES (?,?,?,?,?,?)"
+					self.__dbCursor.execute(sql_command, (user_id, titel, datum, uhrzeit, dauer, ort))
+					self.__dbCon.commit()
+					return 2
+			except:				
+				print("Unexpected error:", sys.exc_info()[0])
+				return 1
+		else:
+			return 1
 
 	def __selectToDoByDay(self, user_id, date):
 		""" Private method for selecting users today by given user id
