@@ -133,6 +133,64 @@ class DatabaseHelper(object):
 		else:
 			return (1, None)
 
+	def insertToDoChange(self, telegramID, datum, uhrzeit):
+		user_id = self.__getUserIdByTelegramID(telegramID)
+		if user_id:
+			sql_command = "SELECT * FROM ToDos WHERE User_ID=? AND Datum=? AND Uhrzeit=?"
+			try:
+				self.__dbCursor.execute(sql_command, (user_id, datum, uhrzeit))
+				result = self.__dbCursor.fetchall()
+				if not result:
+					return 0
+				else:
+					sql_command = "INSERT INTO TodoChange (User_ID, ToDo_ID) VALUES (?,?)"
+					self.__dbCursor.execute(sql_command, (user_id, result[0][0]))
+					self.__dbCon.commit()
+					return 2
+			except:				
+				print("Unexpected error:", sys.exc_info()[0])
+				return 1
+		else:
+			return 1
+
+	def updateToDo(self, telegramID, datumNeu, uhrzeitNeu, titelNeu):
+		user_id = self.__getUserIdByTelegramID(telegramID)
+		if user_id:
+			sql_commnd = "SELECT * FROM TodoChange WHERE User_ID=?"
+			try:
+				self.__dbCursor.execute(sql_commnd, (user_id,))
+				result = self.__dbCursor.fetchall()
+				if not result:
+					return 0
+				else:
+					updated = False
+					if datumNeu:
+						sql_commnd = "UPDATE ToDos SET Datum=? WHERE ID=?"
+						self.__dbCursor.execute(sql_commnd, (datumNeu[0], result[0][1]))
+						self.__dbCon.commit()
+						updated = True
+					elif uhrzeitNeu:
+						sql_commnd = "UPDATE ToDos SET Uhrzeit=? WHERE ID=?"
+						self.__dbCursor.execute(sql_commnd, (uhrzeitNeu[0], result[0][1]))
+						self.__dbCon.commit()
+						updated = True
+					elif titelNeu:
+						sql_commnd = "UPDATE ToDos SET Titel=? WHERE ID=?"
+						self.__dbCursor.execute(sql_commnd, (titelNeu[0], result[0][1]))
+						self.__dbCon.commit()
+						updated = True
+						
+					if updated:
+						self.clearTodoChangeTable(telegramID)
+						return 2
+					else:
+						return 1
+			except:
+				print("Unexpected error:", sys.exc_info()[0])
+				return 1
+		else:
+			return 1
+
 	def __selectToDoByDay(self, user_id, date):
 		""" Private method for selecting users today by given user id
 			and a specific date """
@@ -144,6 +202,20 @@ class DatabaseHelper(object):
 		except:
 			print("Unexpected error:", sys.exc_info()[0])
 			return None
+
+	def clearTodoChangeTable(self, telegramID):
+		user_id = self.__getUserIdByTelegramID(telegramID)
+		if user_id:
+			try:
+				sql_command = "DELETE FROM TodoChange WHERE User_ID=?"
+				self.__dbCursor.execute(sql_command, (user_id,))
+				self.__dbCon.commit()
+				return True
+			except:
+				print("Unexpected error:", sys.exc_info()[0])
+				return False
+		else:
+			return False
 
 	def __getCurrentDate(self):
 		""" Private method retunrs the current date """

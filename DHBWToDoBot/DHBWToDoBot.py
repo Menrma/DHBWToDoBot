@@ -22,37 +22,51 @@ def dialogflowWebhook():
 	req = request.get_json(silent=True, force=True)
 
 	ret = processRequest(req)
-	#ret = __createSimpleTextResponse(ret)
-	ret = __createTelegramTextResponse(ret)
+	ret = __createSimpleTextResponse(ret)
+	#ret = __createTelegramTextResponse(ret)
 	r = make_response(jsonify(ret))
 	return r
 
 #Method for processing the Request
 def processRequest(req):
 	dbHelper = None
+	sourceIsTelegram = False
+	telegramId = ""
 	try:
 		dbHelper = DatabaseHelper(DATABASE_PATH)
 		response = None
-		# Get Telegram Id
-		telegramId = req.get("originalDetectIntentRequest").get("payload").get("data").get("message").get("chat").get("id")
 		# Get name of current intent
 		intentName = req.get("queryResult").get("intent").get("displayName")
 
+		if intentName != "Termin aendern 4":
+			dbHelper.clearTodoChangeTable(TEST_TELEGRAM_ID)
+
+		# check if source is telegram
+		source = req.get("originalDetectIntentRequest").get("source")
+		if source:
+			if source == "telegram":
+				sourceIsTelegram = True
+				# Get Telegram Id
+				telegramId = req.get("originalDetectIntentRequest").get("payload").get("data").get("message").get("chat").get("id")
+
 		if intentName == "Begruessung Intent":
 			#Get Username
-			username = req.get("originalDetectIntentRequest").get("payload").get("data").get("message").get("chat").get("first_name")
-			response = __processBegruessungIntent(dbHelper, TEST_TELEGRAM_ID, username)
+			if sourceIsTelegram:
+				username = req.get("originalDetectIntentRequest").get("payload").get("data").get("message").get("chat").get("first_name")
+				response = __processBegruessungIntent(dbHelper, TEST_TELEGRAM_ID, username)
+			else:
+				response = __processBegruessungIntent(dbHelper, TEST_TELEGRAM_ID, username)
 		elif intentName == "Termin abfragen Datum":
 			# Get date from request
 			date = req.get("queryResult").get("parameters").get("Datum")
 			if date:
-				response = __processTerminAbfragenIntent(dbHelper, date)
+				response = __processTerminAbfragenIntent(dbHelper, TEST_TELEGRAM_ID, date)
 			else:
 				response = __proccessTerminHeuteIntent(dbHelper)
 		elif intentName == "Termin abfragen Heute":
-			response = __proccessTerminHeuteIntent(dbHelper)
+			response = __proccessTerminHeuteIntent(dbHelper, TEST_TELEGRAM_ID)
 		elif intentName == "Termin abfragen Woche":
-			response = __proccessTerminWocheIntent(dbHelper)
+			response = __proccessTerminWocheIntent(dbHelper, TEST_TELEGRAM_ID)
 		elif intentName == "Termin erstellen 2":
 			#Get parameters from request
 			datum = req.get("queryResult").get("parameters").get("Datum")
@@ -60,12 +74,21 @@ def processRequest(req):
 			dauer = req.get("queryResult").get("parameters").get("Dauer")
 			ort = req.get("queryResult").get("parameters").get("Ort")
 			titel = req.get("queryResult").get("parameters").get("Titel")
-			response = __processTerminErstellenIntent(dbHelper, datum, uhrzeit, dauer, ort, titel)
+			response = __processTerminErstellenIntent(dbHelper, TEST_TELEGRAM_ID, datum, uhrzeit, dauer, ort, titel)
 		elif intentName == "Termin löschen 2":
 			datum = req.get("queryResult").get("parameters").get("Datum")
 			uhrzeit = req.get("queryResult").get("parameters").get("Uhrzeit")
 			titel = req.get("queryResult").get("parameters").get("Titel")
-			response = __processTerminLoeschennIntent(dbHelper, datum, uhrzeit, titel)
+			response = __processTerminLoeschenIntent(dbHelper, TEST_TELEGRAM_ID, datum, uhrzeit, titel)
+		elif intentName == "Termin aendern 2":
+			datum = req.get("queryResult").get("parameters").get("Datum")
+			uhrzeit = req.get("queryResult").get("parameters").get("Uhrzeit")
+			response = __processTerminChangeIntent(dbHelper, TEST_TELEGRAM_ID, datum, uhrzeit)
+		elif intentName == "Termin aendern 4":
+			datum = req.get("queryResult").get("parameters").get("Datum")
+			uhrzeit = req.get("queryResult").get("parameters").get("Uhrzeit")
+			titel = req.get("queryResult").get("parameters").get("Titel")
+			response = __processTermin4ChangeIntent(dbHelper, TEST_TELEGRAM_ID, datum, uhrzeit, titel)
 	except:
 		print("Unexpected error:", sys.exc_info()[0])
 	finally:
@@ -98,10 +121,10 @@ def __processBegruessungIntent(dbHelper, telegramId, username):
 			return "Es tut mir Leid, der Benutzer {1} konnte nicht angelegt werden.".format(username)
 
 
-def __processTerminAbfragenIntent(dbHelper, date):
+def __processTerminAbfragenIntent(dbHelper, telegramId, date):
 		date = date[:10]
 		dateOutput = __convertDateForOutput(date)
-		dbResult = dbHelper.selectDayTodo(TEST_TELEGRAM_ID, date)
+		dbResult = dbHelper.selectDayTodo(telegramId, date)
 		if(dbResult):
 			response = "Termine am {0}:\n".format(dateOutput)
 			response += __generateResponseFromDBResult(dbResult)
@@ -109,8 +132,8 @@ def __processTerminAbfragenIntent(dbHelper, date):
 		else:
 			return "Für den {0} sind keine Aufgaben vorhanden".format(dateOutput)
 
-def __proccessTerminHeuteIntent(dbhelper):
-		todoToday = dbhelper.selectDayTodo(TEST_TELEGRAM_ID)
+def __proccessTerminHeuteIntent(dbhelper, telegramId):
+		todoToday = dbhelper.selectDayTodo(telegramId)
 		if todoToday:
 			response = "Aufgaben heute:\n"
 			response += __generateResponseFromDBResult(todoToday)
@@ -118,8 +141,8 @@ def __proccessTerminHeuteIntent(dbhelper):
 		else:
 			return "Heute sind keine Aufgaben vorhanden."
 
-def __proccessTerminWocheIntent(dbhelper):
-		weekResponse = dbhelper.selectWeekTodo(TEST_TELEGRAM_ID)
+def __proccessTerminWocheIntent(dbhelper, telegramId):
+		weekResponse = dbhelper.selectWeekTodo(telegramId)
 		if weekResponse:
 			response = "Aufgaben kommende Woche:\n"
 			response += __generateResponseFromDBResult(weekResponse)
@@ -127,11 +150,11 @@ def __proccessTerminWocheIntent(dbhelper):
 		else:
 			return "Für die kommende Woche sind keine Aufgaben vorhanden."
 
-def __processTerminErstellenIntent(dbhelper, datum, uhrzeit, dauer, ort, titel):
+def __processTerminErstellenIntent(dbhelper, telegramId, datum, uhrzeit, dauer, ort, titel):
 	dt = datum[:10]
 	uz = uhrzeit[11:-6]
 	dateOutput = __convertDateForOutput(dt)
-	insertResponse, res = dbhelper.insertToDo(TEST_TELEGRAM_ID, dt, uz, ort, dauer, titel)
+	insertResponse, res = dbhelper.insertToDo(telegramId, dt, uz, ort, dauer, titel)
 	if insertResponse == 0:
 		# zu diesem Zeitpunkt gibt es bereit einen Termin
 		return "Am {0} um {1} gibt es bereits einen Termin mit dem Titel: {2}".format(dateOutput, uz, res[0][2])
@@ -142,11 +165,36 @@ def __processTerminErstellenIntent(dbhelper, datum, uhrzeit, dauer, ort, titel):
 		# Hat funktioniert
 		return "Termin {0} am {1} um {2} wurde erfolgreich angelegt.".format(titel, dateOutput, uz)
 
-def __processTerminLoeschennIntent(dbhelper, datum, uhrzeit, titel):
+def __processTerminChangeIntent(dbhelper, telegramId, datum, uhrzeit):
 	dt = datum[:10]
 	uz = uhrzeit[11:-6]
 	dateOutput = __convertDateForOutput(dt)
-	deleteResponse = dbhelper.deleteToDo(TEST_TELEGRAM_ID, dt, uz, titel)
+	insrtResp = dbhelper.insertToDoChange(telegramId, dt, uz)
+	if insrtResp == 0:
+		return "Es existiert kein Termin am {0} um {1} Uhr.".format(dateOutput, uz)
+	elif insrtResp == 1:
+		return "Es ist ein unerwarteter Fehler aufgetreten. Bitte erneut versuchen."
+	elif insrtResp == 2:
+		return "Welche Daten sollen geändert werden? Der Titel, das Datum oder die Uhrzeit?"
+
+def __processTermin4ChangeIntent(dbhelper, telegramId, datum, uhrzeit, titel):
+	dt = datum[:10]
+	uz = uhrzeit[11:-6]
+	if dt:
+		dateOutput = __convertDateForOutput(dt)
+	inserResponse = dbhelper.updateToDo(telegramId, datum, uhrzeit, titel)
+	if inserResponse == 0:
+		return "Es existiert kein Termin am {0} um {1} Uhr.".format(dateOutput, uz)
+	elif inserResponse == 1:
+		return "Es ist ein unerwarteter Fehler aufgetreten. Bitte erneut versuchen."
+	elif inserResponse == 2:
+		return "Termin wurde erfolgreich geändert."
+
+def __processTerminLoeschenIntent(dbhelper, telegramId, datum, uhrzeit, titel):
+	dt = datum[:10]
+	uz = uhrzeit[11:-6]
+	dateOutput = __convertDateForOutput(dt)
+	deleteResponse = dbhelper.deleteToDo(telegramId, dt, uz, titel)
 	if deleteResponse == 0:
 		return "Am {0} um {1} ist keine Aufgabe vorhanden.".format(dt, uz)
 	elif deleteResponse == 1:
@@ -189,3 +237,7 @@ def __generateResponseFromDBResult(dbResult):
 if __name__ == "__main__":
 	print("Starting Application...")
 	app.run()
+	#dbHelper = DatabaseHelper(DATABASE_PATH)
+
+	#dbHelper.updateToDo(TEST_TELEGRAM_ID, '2018-06-20', '2018-06-25', None, None, None, None)
+	#dbHelper.updateToDo(TEST_TELEGRAM_ID, '2018-06-20', '2018-06-25', None, None, None, None)
