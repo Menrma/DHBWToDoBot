@@ -35,7 +35,7 @@ class DatabaseHelper(object):
 		try:
 			sql_command = 'INSERT INTO User (Username, TelegramID) VALUES(?,?)'
 			self.__dbCursor.execute(sql_command, (username, telegramID))
-			#self.__dbCursor.commit()
+			self.__dbCon.commit()
 			return True
 		except:
 			print("Unexpected error:", sys.exc_info()[0])
@@ -58,7 +58,7 @@ class DatabaseHelper(object):
 			try:
 				currentDate = self.__getCurrentDate()
 				end_date = self.__calculateEndDate(currentDate, 7)
-				sql_command = 'SELECT * FROM ToDos WHERE User_ID=? AND Datum BETWEEN date(?) AND date(?)'
+				sql_command = 'SELECT * FROM ToDos WHERE User_ID=? AND Datum BETWEEN date(?) AND date(?) ORDER BY Datum, Uhrzeit'
 				self.__dbCursor.execute(sql_command, (user_id, currentDate, end_date))
 				result = self.__dbCursor.fetchall()
 				return result
@@ -126,18 +126,18 @@ class DatabaseHelper(object):
 					sql_command = "INSERT INTO ToDos (User_ID, Titel, Datum, Uhrzeit, Dauer, Ort) VALUES (?,?,?,?,?,?)"
 					self.__dbCursor.execute(sql_command, (user_id, titel, datum, uhrzeit, dauer, ort))
 					self.__dbCon.commit()
-					return 2
+					return (2, None)
 			except:				
 				print("Unexpected error:", sys.exc_info()[0])
-				return 1
+				return (1, None)
 		else:
-			return 1
+			return (1, None)
 
 	def __selectToDoByDay(self, user_id, date):
 		""" Private method for selecting users today by given user id
 			and a specific date """
 		try:
-			sql_command = 'SELECT * FROM ToDos WHERE User_ID=? AND Datum=date(?)'
+			sql_command = 'SELECT * FROM ToDos WHERE User_ID=? AND Datum=date(?) ORDER BY Datum, Uhrzeit'
 			self.__dbCursor.execute(sql_command, (user_id, date))
 			result = self.__dbCursor.fetchall()
 			return result

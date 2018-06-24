@@ -22,7 +22,8 @@ def dialogflowWebhook():
 	req = request.get_json(silent=True, force=True)
 
 	ret = processRequest(req)
-	ret = __createSimpleTextResponse(ret)
+	#ret = __createSimpleTextResponse(ret)
+	ret = __createTelegramTextResponse(ret)
 	r = make_response(jsonify(ret))
 	return r
 
@@ -32,11 +33,15 @@ def processRequest(req):
 	try:
 		dbHelper = DatabaseHelper(DATABASE_PATH)
 		response = None
+		# Get Telegram Id
+		telegramId = req.get("originalDetectIntentRequest").get("payload").get("data").get("message").get("chat").get("id")
 		# Get name of current intent
 		intentName = req.get("queryResult").get("intent").get("displayName")
 
 		if intentName == "Begruessung Intent":
-			response = __processBegruessungIntent(dbHelper)
+			#Get Username
+			username = req.get("originalDetectIntentRequest").get("payload").get("data").get("message").get("chat").get("first_name")
+			response = __processBegruessungIntent(dbHelper, TEST_TELEGRAM_ID, username)
 		elif intentName == "Termin abfragen Datum":
 			# Get date from request
 			date = req.get("queryResult").get("parameters").get("Datum")
@@ -55,33 +60,43 @@ def processRequest(req):
 			dauer = req.get("queryResult").get("parameters").get("Dauer")
 			ort = req.get("queryResult").get("parameters").get("Ort")
 			titel = req.get("queryResult").get("parameters").get("Titel")
-			repsonse = __processTerminErstellenIntent(dbHelper, datum, uhrzeit, dauer, ort, titel)
+			response = __processTerminErstellenIntent(dbHelper, datum, uhrzeit, dauer, ort, titel)
 		elif intentName == "Termin löschen 2":
 			datum = req.get("queryResult").get("parameters").get("Datum")
 			uhrzeit = req.get("queryResult").get("parameters").get("Uhrzeit")
-			titel = req.get("queryResult").get("parameters").get("any")
+			titel = req.get("queryResult").get("parameters").get("Titel")
 			response = __processTerminLoeschennIntent(dbHelper, datum, uhrzeit, titel)
 	except:
 		print("Unexpected error:", sys.exc_info()[0])
 	finally:
 		dbHelper.closeConnection()
 
+	print ("Intent: {0} / Response: {1}".format(intentName, response))
 	return response
 	
 def __createSimpleTextResponse(data):
 	return {"fulfillmentText" : data};
 
+def __createTelegramTextResponse(data):
+	return {"payload" :	{ "telegram" : { "parse_mode" : "HTML", "text" : data}}}
+
 def __convertDateForOutput(date):
 	dateSplit = date.split('-')
 	return "{0}.{1}.{2}".format(dateSplit[2], dateSplit[1], dateSplit[0])
 
-def __processBegruessungIntent(dbHelper):
-	dbResult = dbHelper.checkUser(TEST_TELEGRAM_ID)
+def __processBegruessungIntent(dbHelper, telegramId, username):
+	dbResult = dbHelper.checkUser(telegramId)
 	if dbResult:
 		username = dbResult[0][1]
 		return "Hallo {0}, wie kann ich dir helfen?".format(username)
 	else:
-		return "Hallo, ich bin Dein persönlicher Assistent und werde Dich bei der Planung Deiner Termine unterstützen. Möchtest Du einen Termin erstellen?"
+		# User is not known => Save
+		insertResult = dbHelper.insertUser(username, telegramId)
+		if insertResult:
+			return "Hallo {0}, wie kann ich dir helfen?".format(username)
+		else:
+			return "Es tut mir Leid, der Benutzer {1} konnte nicht angelegt werden.".format(username)
+
 
 def __processTerminAbfragenIntent(dbHelper, date):
 		date = date[:10]
@@ -119,10 +134,10 @@ def __processTerminErstellenIntent(dbhelper, datum, uhrzeit, dauer, ort, titel):
 	insertResponse, res = dbhelper.insertToDo(TEST_TELEGRAM_ID, dt, uz, ort, dauer, titel)
 	if insertResponse == 0:
 		# zu diesem Zeitpunkt gibt es bereit einen Termin
-		return ""
+		return "Am {0} um {1} gibt es bereits einen Termin mit dem Titel: {2}".format(dateOutput, uz, res[0][2])
 	elif insertResponse == 1:
 		# Fehler
-		return ""
+		return "Es ist ein Fehler beim Anlegen der Aufgabe mit dem Titel {0} am {1} um {2} aufgetreten.".format(titel, dateOutput, uz)
 	elif insertResponse == 2:
 		# Hat funktioniert
 		return "Termin {0} am {1} um {2} wurde erfolgreich angelegt.".format(titel, dateOutput, uz)
@@ -145,15 +160,30 @@ def __processTerminLoeschennIntent(dbhelper, datum, uhrzeit, titel):
 def __generateResponseFromDBResult(dbResult):
 	response = ""
 	for entry in dbResult:
+		dat = __convertDateForOutput(entry[3])
 		if not entry[5] and not entry[6]:
-			response += "Titel: {0}, Uhrzeit: {1}".format(entry[2], entry[3])
+			response += " - <b>Titel:</b> {0}, <b>Datum:</b> {1}, <b>Uhrzeit:</b> {2} Uhr\n".format(entry[2], dat, entry[4])
 		elif not entry[5]:
-			response += "Titel: {0}, Uhrzeit: {1}, Ort: {2}".format(entry[2], entry[3], entry[6])
+			response += " - <b>Titel:</b> {0}, <b>Datum:</b> {1}, <b>Uhrzeit:</b> {2} Uhr, <b>Ort:</b> {3}\n".format(entry[2], dat, entry[4], entry[6])
 		elif not entry[6]:
-			response += "Titel: {0}, Uhrzeit: {1}, Dauer: {2}".format(entry[2], entry[3], entry[5])
+			response += " - <b>Titel:</b> {0}, <b>Datum:</b> {1}, <b>Uhrzeit:</b> {2} Uhr, <b>Dauer:</b> {3}\n".format(entry[2], dat, entry[4], entry[5])
 		else:
-			response += "Titel: {0}, Uhrzeit: {1}, Dauer: {2}, Ort: {3}".format(entry[2], entry[3], entry[5], entry[6])
+			response += " - <b>Titel:</b> {0}, <b>Datum:</b> {1}, <b>Uhrzeit:</b> {2} Uhr, <b>Dauer:</b> {3}, <b>Ort:</b> {4}\n".format(entry[2], dat, entry[4], entry[5], entry[6])
 	return response
+
+#def __generateAdvancedResponseFromDBResult(dbResult):	
+#	response = ""
+#	for entry in dbResult:
+#		dat = __convertDateForOutput(entry[3])
+#		if not entry[5] and not entry[6]:
+#			response += " - <b>Titel:</b> {0}\n<b>    - Datum:</b> {1}\n<b>    - Uhrzeit:</b> {2} Uhr\n".format(entry[2], dat, entry[4])
+#		elif not entry[5]:
+#			response += " - <b>Titel:</b> {0}\n<b>    - Datum:</b> {1}\n<b>    - Uhrzeit:</b> {2} Uhr\n<b>    - Ort:</b> {3}\n".format(entry[2], dat, entry[4], entry[6])
+#		elif not entry[6]:
+#			response += " - <b>Titel:</b> {0}\n<b>    - Datum:</b> {1}\n<b>    - Uhrzeit:</b> {2} Uhr\n<b>    - Dauer:</b> {3}\n".format(entry[2], dat, entry[4], entry[5])
+#		else:
+#			response += " - <b>Titel:</b> {0}\n<b>    - Datum:</b> {1}\n<b>    - Uhrzeit:</b> {2} Uhr\n<b>    - Dauer:</b> {3}\n<b>    - Ort:</b> {4}\n".format(entry[2], dat, entry[4], entry[5], entry[6])
+#	return response
 
 # Entry point of the application
 if __name__ == "__main__":
