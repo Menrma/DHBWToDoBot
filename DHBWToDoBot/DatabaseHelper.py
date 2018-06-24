@@ -166,17 +166,17 @@ class DatabaseHelper(object):
 					updated = False
 					if datumNeu:
 						sql_commnd = "UPDATE ToDos SET Datum=? WHERE ID=?"
-						self.__dbCursor.execute(sql_commnd, (datumNeu[0], result[0][1]))
+						self.__dbCursor.execute(sql_commnd, (datumNeu, result[0][1]))
 						self.__dbCon.commit()
 						updated = True
 					elif uhrzeitNeu:
 						sql_commnd = "UPDATE ToDos SET Uhrzeit=? WHERE ID=?"
-						self.__dbCursor.execute(sql_commnd, (uhrzeitNeu[0], result[0][1]))
+						self.__dbCursor.execute(sql_commnd, (uhrzeitNeu, result[0][1]))
 						self.__dbCon.commit()
 						updated = True
 					elif titelNeu:
 						sql_commnd = "UPDATE ToDos SET Titel=? WHERE ID=?"
-						self.__dbCursor.execute(sql_commnd, (titelNeu[0], result[0][1]))
+						self.__dbCursor.execute(sql_commnd, (titelNeu, result[0][1]))
 						self.__dbCon.commit()
 						updated = True
 						

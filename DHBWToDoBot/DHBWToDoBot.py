@@ -22,8 +22,8 @@ def dialogflowWebhook():
 	req = request.get_json(silent=True, force=True)
 
 	ret = processRequest(req)
-	ret = __createSimpleTextResponse(ret)
-	#ret = __createTelegramTextResponse(ret)
+	#ret = __createSimpleTextResponse(ret)
+	ret = __createTelegramTextResponse(ret)
 	r = make_response(jsonify(ret))
 	return r
 
@@ -43,6 +43,7 @@ def processRequest(req):
 
 		# check if source is telegram
 		source = req.get("originalDetectIntentRequest").get("source")
+		username = ""
 		if source:
 			if source == "telegram":
 				sourceIsTelegram = True
@@ -178,16 +179,25 @@ def __processTerminChangeIntent(dbhelper, telegramId, datum, uhrzeit):
 		return "Welche Daten sollen geändert werden? Der Titel, das Datum oder die Uhrzeit?"
 
 def __processTermin4ChangeIntent(dbhelper, telegramId, datum, uhrzeit, titel):
-	dt = datum[:10]
-	uz = uhrzeit[11:-6]
+	dt = ""
+	uz = ""
+	ttl =  ""
+	if datum:
+		dt = datum[0]
+		dt = dt[:10]
+	if uhrzeit:
+		uz = uhrzeit[0]
+		uz = uz[11:-6]
 	if dt:
 		dateOutput = __convertDateForOutput(dt)
-	inserResponse = dbhelper.updateToDo(telegramId, datum, uhrzeit, titel)
-	if inserResponse == 0:
-		return "Es existiert kein Termin am {0} um {1} Uhr.".format(dateOutput, uz)
-	elif inserResponse == 1:
+	if titel:
+		ttl = titel[0]
+	insertResponse = dbhelper.updateToDo(telegramId, dt, uz, ttl)
+	if insertResponse == 0:
+		return "Es existiert kein Termin zu diesem Zeitpunkt."
+	elif insertResponse == 1:
 		return "Es ist ein unerwarteter Fehler aufgetreten. Bitte erneut versuchen."
-	elif inserResponse == 2:
+	elif insertResponse == 2:
 		return "Termin wurde erfolgreich geändert."
 
 def __processTerminLoeschenIntent(dbhelper, telegramId, datum, uhrzeit, titel):
