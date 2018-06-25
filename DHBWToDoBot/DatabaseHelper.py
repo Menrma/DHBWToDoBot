@@ -191,10 +191,6 @@ class DatabaseHelper(object):
 						
 					if updated:
 						self.clearTodoChangeTable(telegramID)
-						sql_commnd = "UPDATE ToDos SET Titel=? WHERE ID=?"
-						self.__dbCursor.execute(sql_commnd, (titelNeu, result[0][1]))
-						self.__dbCon.commit()
-						updated = True
 						return 2
 					else:
 						return 1

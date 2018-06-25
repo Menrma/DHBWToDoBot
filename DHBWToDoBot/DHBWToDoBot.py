@@ -38,8 +38,6 @@ def processRequest(req):
 		# Get name of current intent
 		intentName = req.get("queryResult").get("intent").get("displayName")
 
-		telegramId = TEST_TELEGRAM_ID
-
 		if intentName != "Termin aendern 4":
 			dbHelper.clearTodoChangeTable(TEST_TELEGRAM_ID)
 
@@ -51,6 +49,8 @@ def processRequest(req):
 				sourceIsTelegram = True
 				# Get Telegram Id
 				telegramId = req.get("originalDetectIntentRequest").get("payload").get("data").get("message").get("chat").get("id")
+
+		telegramId = TEST_TELEGRAM_ID
 
 		if intentName == "Begruessung Intent":
 			#Get Username
