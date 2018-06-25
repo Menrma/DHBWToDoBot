@@ -136,10 +136,12 @@ class DatabaseHelper(object):
 	def insertToDoChange(self, telegramID, datum, uhrzeit):
 		user_id = self.__getUserIdByTelegramID(telegramID)
 		if user_id:
-			sql_command = "SELECT * FROM ToDos WHERE User_ID=? AND Datum=? AND Uhrzeit=?"
+			#sql_command = "SELECT * FROM ToDos WHERE User_ID=? AND Datum=? AND Uhrzeit=?"
+			#try:
+			#	self.__dbCursor.execute(sql_command, (user_id, datum, uhrzeit))
+			#	result = self.__dbCursor.fetchall()
 			try:
-				self.__dbCursor.execute(sql_command, (user_id, datum, uhrzeit))
-				result = self.__dbCursor.fetchall()
+				result = self.__checkTodoAtDateAndTime(user_id, datum, uhrzeit)
 				if not result:
 					return 0
 				else:
@@ -147,7 +149,7 @@ class DatabaseHelper(object):
 					self.__dbCursor.execute(sql_command, (user_id, result[0][0]))
 					self.__dbCon.commit()
 					return 2
-			except:				
+			except:
 				print("Unexpected error:", sys.exc_info()[0])
 				return 1
 		else:
@@ -163,13 +165,20 @@ class DatabaseHelper(object):
 				if not result:
 					return 0
 				else:
+					todo = self.__selectTodoById(result[0][1])
 					updated = False
 					if datumNeu:
+						rs = self.__checkTodoAtDateAndTime(user_id, datumNeu, todo[0][4])
+						if rs:
+							return 3
 						sql_commnd = "UPDATE ToDos SET Datum=? WHERE ID=?"
 						self.__dbCursor.execute(sql_commnd, (datumNeu, result[0][1]))
 						self.__dbCon.commit()
 						updated = True
 					elif uhrzeitNeu:
+						rs = self.__checkTodoAtDateAndTime(user_id, todo[0][3], uhrzeitNeu)
+						if rs:
+							return 3
 						sql_commnd = "UPDATE ToDos SET Uhrzeit=? WHERE ID=?"
 						self.__dbCursor.execute(sql_commnd, (uhrzeitNeu, result[0][1]))
 						self.__dbCon.commit()
@@ -182,6 +191,10 @@ class DatabaseHelper(object):
 						
 					if updated:
 						self.clearTodoChangeTable(telegramID)
+						sql_commnd = "UPDATE ToDos SET Titel=? WHERE ID=?"
+						self.__dbCursor.execute(sql_commnd, (titelNeu, result[0][1]))
+						self.__dbCon.commit()
+						updated = True
 						return 2
 					else:
 						return 1
@@ -191,8 +204,18 @@ class DatabaseHelper(object):
 		else:
 			return 1
 
+	def __checkTodoAtDateAndTime(self, user_id, datum, uhrzeit):
+		try:
+			sql_command = "SELECT * FROM ToDos WHERE User_ID=? AND Datum=? AND Uhrzeit=?"
+			self.__dbCursor.execute(sql_command, (user_id, datum, uhrzeit))
+			result = self.__dbCursor.fetchall()
+			return result
+		except:
+			print("Unexpected error:", sys.exc_info()[0])
+			return None
+
 	def __selectToDoByDay(self, user_id, date):
-		""" Private method for selecting users today by given user id
+		""" Private method for selecting users todo by given user id
 			and a specific date """
 		try:
 			sql_command = 'SELECT * FROM ToDos WHERE User_ID=? AND Datum=date(?) ORDER BY Datum, Uhrzeit'
@@ -216,6 +239,16 @@ class DatabaseHelper(object):
 				return False
 		else:
 			return False
+
+	def __selectTodoById(self, todo_id):
+		try:
+			sql_command = "SELECT * FROM ToDos WHERE ID=?"
+			self.__dbCursor.execute(sql_command, (todo_id,))
+			result = self.__dbCursor.fetchall()
+			return result
+		except:
+			print("Unexpected error:", sys.exc_info()[0])
+			return None
 
 	def __getCurrentDate(self):
 		""" Private method retunrs the current date """

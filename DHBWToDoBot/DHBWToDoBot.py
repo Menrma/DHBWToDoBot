@@ -38,6 +38,8 @@ def processRequest(req):
 		# Get name of current intent
 		intentName = req.get("queryResult").get("intent").get("displayName")
 
+		telegramId = TEST_TELEGRAM_ID
+
 		if intentName != "Termin aendern 4":
 			dbHelper.clearTodoChangeTable(TEST_TELEGRAM_ID)
 
@@ -54,20 +56,20 @@ def processRequest(req):
 			#Get Username
 			if sourceIsTelegram:
 				username = req.get("originalDetectIntentRequest").get("payload").get("data").get("message").get("chat").get("first_name")
-				response = __processBegruessungIntent(dbHelper, TEST_TELEGRAM_ID, username)
+				response = __processBegruessungIntent(dbHelper, telegramId, username)
 			else:
-				response = __processBegruessungIntent(dbHelper, TEST_TELEGRAM_ID, username)
+				response = __processBegruessungIntent(dbHelper, telegramId, username)
 		elif intentName == "Termin abfragen Datum":
 			# Get date from request
 			date = req.get("queryResult").get("parameters").get("Datum")
 			if date:
-				response = __processTerminAbfragenIntent(dbHelper, TEST_TELEGRAM_ID, date)
+				response = __processTerminAbfragenIntent(dbHelper, telegramId, date)
 			else:
 				response = __proccessTerminHeuteIntent(dbHelper)
 		elif intentName == "Termin abfragen Heute":
-			response = __proccessTerminHeuteIntent(dbHelper, TEST_TELEGRAM_ID)
+			response = __proccessTerminHeuteIntent(dbHelper, telegramId)
 		elif intentName == "Termin abfragen Woche":
-			response = __proccessTerminWocheIntent(dbHelper, TEST_TELEGRAM_ID)
+			response = __proccessTerminWocheIntent(dbHelper, telegramId)
 		elif intentName == "Termin erstellen 2":
 			#Get parameters from request
 			datum = req.get("queryResult").get("parameters").get("Datum")
@@ -75,21 +77,21 @@ def processRequest(req):
 			dauer = req.get("queryResult").get("parameters").get("Dauer")
 			ort = req.get("queryResult").get("parameters").get("Ort")
 			titel = req.get("queryResult").get("parameters").get("Titel")
-			response = __processTerminErstellenIntent(dbHelper, TEST_TELEGRAM_ID, datum, uhrzeit, dauer, ort, titel)
+			response = __processTerminErstellenIntent(dbHelper, telegramId, datum, uhrzeit, dauer, ort, titel)
 		elif intentName == "Termin löschen 2":
 			datum = req.get("queryResult").get("parameters").get("Datum")
 			uhrzeit = req.get("queryResult").get("parameters").get("Uhrzeit")
 			titel = req.get("queryResult").get("parameters").get("Titel")
-			response = __processTerminLoeschenIntent(dbHelper, TEST_TELEGRAM_ID, datum, uhrzeit, titel)
+			response = __processTerminLoeschenIntent(dbHelper, telegramId, datum, uhrzeit, titel)
 		elif intentName == "Termin aendern 2":
 			datum = req.get("queryResult").get("parameters").get("Datum")
 			uhrzeit = req.get("queryResult").get("parameters").get("Uhrzeit")
-			response = __processTerminChangeIntent(dbHelper, TEST_TELEGRAM_ID, datum, uhrzeit)
+			response = __processTerminChangeIntent(dbHelper, telegramId, datum, uhrzeit)
 		elif intentName == "Termin aendern 4":
 			datum = req.get("queryResult").get("parameters").get("Datum")
 			uhrzeit = req.get("queryResult").get("parameters").get("Uhrzeit")
 			titel = req.get("queryResult").get("parameters").get("Titel")
-			response = __processTermin4ChangeIntent(dbHelper, TEST_TELEGRAM_ID, datum, uhrzeit, titel)
+			response = __processTermin4ChangeIntent(dbHelper, telegramId, datum, uhrzeit, titel)
 	except:
 		print("Unexpected error:", sys.exc_info()[0])
 	finally:
@@ -194,11 +196,13 @@ def __processTermin4ChangeIntent(dbhelper, telegramId, datum, uhrzeit, titel):
 		ttl = titel[0]
 	insertResponse = dbhelper.updateToDo(telegramId, dt, uz, ttl)
 	if insertResponse == 0:
-		return "Es existiert kein Termin zu diesem Zeitpunkt."
+		return "Es konnte kein Termin ermittelt werden."
 	elif insertResponse == 1:
 		return "Es ist ein unerwarteter Fehler aufgetreten. Bitte erneut versuchen."
 	elif insertResponse == 2:
 		return "Termin wurde erfolgreich geändert."
+	elif insertResponse == 3:
+		return "Zu diesem Zeitpunkt existiert bereits ein Termin. Bitte ändern Sie ihre Eingabe."
 
 def __processTerminLoeschenIntent(dbhelper, telegramId, datum, uhrzeit, titel):
 	dt = datum[:10]
