@@ -50,7 +50,7 @@ def processRequest(req):
 				# Get Telegram Id
 				telegramId = req.get("originalDetectIntentRequest").get("payload").get("data").get("message").get("chat").get("id")
 
-		telegramId = TEST_TELEGRAM_ID
+		#telegramId = TEST_TELEGRAM_ID
 
 		if intentName == "Begruessung Intent":
 			#Get Username
